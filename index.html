@@ -1,0 +1,2058 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF 页数清点</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23f5f6f3'/%3E%3Crect x='6' y='6' width='9' height='9' fill='%230d7f9c'/%3E%3Crect x='17' y='6' width='9' height='9' fill='%23bd2b60'/%3E%3Crect x='6' y='17' width='9' height='9' fill='%23dfa616'/%3E%3Crect x='17' y='17' width='9' height='9' fill='%2315181b'/%3E%3C/svg%3E">
+<style>
+:root{
+  --paper:#f5f6f3;
+  --sheet:#ffffff;
+  --ink:#15181b;
+  --ink-2:#40474d;
+  --ink-3:#7c858b;
+  --rule:#cfd4cd;
+  --rule-soft:#e4e7e1;
+  --cy:#0d7f9c;
+  --mg:#bd2b60;
+  --yl:#dfa616;
+  --kk:#181b1f;
+  --font:"Segoe UI Variable Text","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"Cascadia Mono","Consolas","SF Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--font);
+  font-size:15px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+.page{
+  max-width:1180px;
+  margin:0 auto;
+  padding:28px 22px 56px;
+  min-width:0;
+}
+h1,h2,h3,p{margin:0}
+
+/* ===== 抬头 ===== */
+.masthead{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:18px;
+  padding-bottom:14px;
+  border-bottom:2px solid var(--ink);
+  flex-wrap:wrap;
+}
+.brand{display:flex;align-items:flex-start;gap:14px;min-width:0}
+.marks{display:grid;grid-template-columns:repeat(2,10px);grid-template-rows:repeat(2,10px);gap:2px;margin-top:5px;flex:none}
+.marks i{display:block;width:10px;height:10px}
+.marks .c{background:var(--cy)}
+.marks .m{background:var(--mg)}
+.marks .y{background:var(--yl)}
+.marks .k{background:var(--kk)}
+h1{font-size:clamp(25px,3.4vw,33px);font-weight:650;letter-spacing:.01em;line-height:1.15}
+.tagline{margin-top:5px;font-size:13.5px;color:var(--ink-3);max-width:34em}
+.job{text-align:right;min-width:0;max-width:46%}
+.job-label{display:block;font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+#jobName{
+  display:block;
+  font-family:var(--mono);
+  font-size:15px;
+  font-weight:600;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* ===== 投放区 ===== */
+.tray{
+  position:relative;
+  margin-top:24px;
+  background:var(--sheet);
+  border:1px solid var(--rule);
+  padding:44px 26px;
+  text-align:center;
+  transition:border-color .16s, background .16s;
+}
+.tray.is-compact{padding:18px 20px;text-align:left}
+.tray.is-compact .tray-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.tray.is-compact .tray-sub,
+.tray.is-compact .tray-title{display:none}
+.crop{position:absolute;width:15px;height:15px;pointer-events:none}
+.crop::before,.crop::after{content:"";position:absolute;background:var(--ink-3)}
+.crop::before{width:15px;height:1px;top:0;left:0}
+.crop::after{width:1px;height:15px;top:0;left:0}
+.crop.tl{top:9px;left:9px}
+.crop.tr{top:9px;right:9px;transform:rotate(90deg)}
+.crop.br{bottom:9px;right:9px;transform:rotate(180deg)}
+.crop.bl{bottom:9px;left:9px;transform:rotate(270deg)}
+.tray-title{font-size:19px;font-weight:650}
+.tray-sub{margin-top:7px;font-size:13px;color:var(--ink-3)}
+.tray-actions{margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+
+.btn{
+  font-family:var(--font);
+  font-size:14px;
+  font-weight:600;
+  color:var(--ink);
+  background:transparent;
+  border:1px solid var(--ink);
+  padding:11px 18px;
+  min-height:44px;
+  cursor:pointer;
+  transition:background .14s,color .14s;
+}
+.btn:hover{background:var(--ink);color:var(--paper)}
+.btn-primary{background:var(--ink);color:var(--paper)}
+.btn-primary:hover{background:var(--mg);border-color:var(--mg);color:#fff}
+.btn:focus-visible,.chip:focus-visible,th.sortable:focus-visible{outline:2px solid var(--mg);outline-offset:2px}
+
+/* ===== 统计条 ===== */
+.tally{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  border:1px solid var(--rule);
+  border-top:none;
+  background:var(--sheet);
+}
+.tally .cell{padding:16px 18px;border-left:1px solid var(--rule-soft);min-width:0}
+.tally .cell:first-child{border-left:none}
+.tally .num{
+  font-family:var(--mono);
+  font-variant-numeric:tabular-nums;
+  font-size:clamp(24px,3.4vw,32px);
+  font-weight:600;
+  line-height:1.2;
+  display:block;
+  word-break:break-all;
+}
+.tally .num small{font-size:.45em;font-weight:500;color:var(--ink-3);margin-left:3px;font-family:var(--font)}
+.tally .cap{font-size:12px;color:var(--ink-3);margin-top:2px;display:block}
+
+.status{
+  margin:12px 0 0;
+  font-size:13px;
+  color:var(--ink-2);
+  display:flex;
+  gap:14px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+.status .dot{width:5px;height:5px;background:var(--rule);border-radius:50%;display:inline-block;margin-right:6px;vertical-align:1px}
+.status .warn{color:#a3261c}
+
+/* ===== 表格 ===== */
+.block{margin-top:30px}
+.block-head{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:14px;
+  padding-bottom:8px;
+  border-bottom:1px solid var(--ink);
+  flex-wrap:wrap;
+}
+.block-head h2{font-size:15px;font-weight:650;letter-spacing:.01em}
+.block-head .hint{font-size:12.5px;color:var(--ink-3)}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th,td{
+  text-align:left;
+  padding:10px 10px;
+  border-bottom:1px solid var(--rule-soft);
+  vertical-align:middle;
+  font-size:14px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+th{
+  font-size:12px;
+  font-weight:600;
+  color:var(--ink-3);
+  letter-spacing:.02em;
+  border-bottom:1px solid var(--rule);
+  white-space:nowrap;
+}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{color:var(--ink)}
+th.sortable.is-sorted::after{content:" ↓";color:var(--mg)}
+th.sortable.is-sorted.asc::after{content:" ↑"}
+th.num,td.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr.grow{cursor:pointer}
+tr.grow:hover td{background:#fbfbf9}
+tr.grow.is-on td{background:#faf5f7}
+tr.grow.is-on td:first-child{box-shadow:inset 3px 0 0 var(--mg)}
+td .folder{display:flex;align-items:center;gap:8px;min-width:0}
+td .folder .name{flex:1;min-width:0;white-space:normal;word-break:break-word;overflow-wrap:anywhere;line-height:1.4}
+td .folder{align-items:flex-start}
+.chipmarks{margin-top:3px}
+.chipmarks{display:inline-flex;gap:2px;flex:none}
+.chipmarks i{width:7px;height:7px;display:block}
+.chipmarks .c{background:var(--cy)}
+.chipmarks .m{background:var(--mg)}
+.chipmarks .y{background:var(--yl)}
+.chipmarks .k{background:var(--kk)}
+.bar{display:flex;align-items:center;gap:9px}
+.bar .track{flex:1;height:6px;background:var(--rule-soft);position:relative;min-width:30px}
+.bar .fill{position:absolute;left:0;top:0;bottom:0;background:var(--ink);width:0}
+.bar .pct{font-family:var(--mono);font-size:12px;color:var(--ink-2);width:38px;text-align:right;flex:none}
+.file-cell{display:flex;flex-direction:column;min-width:0}
+.file-cell .fn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-cell .fp{font-size:11.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bad{color:#a3261c}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 14px;align-items:center}
+.chip{
+  font-size:13px;
+  font-family:var(--font);
+  border:1px solid var(--rule);
+  background:var(--sheet);
+  color:var(--ink-2);
+  padding:7px 12px;
+  min-height:36px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+}
+.chip:hover{border-color:var(--ink-2);color:var(--ink)}
+.chip.is-on{background:var(--ink);border-color:var(--ink);color:var(--sheet)}
+.chip .n{font-family:var(--mono);font-size:11.5px;opacity:.75}
+.search{
+  font-family:var(--font);
+  font-size:16px;
+  padding:10px 12px;
+  border:1px solid var(--rule);
+  background:var(--sheet);
+  color:var(--ink);
+  min-width:0;
+  flex:1 1 220px;
+  max-width:320px;
+}
+.search:focus{outline:none;border-color:var(--ink)}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+.table-wrap{overflow-x:auto}
+
+.notes{margin-top:26px;font-size:12.5px;color:var(--ink-3);line-height:1.7;max-width:70em}
+.notes b{color:var(--ink-2);font-weight:600}
+.empty{padding:34px 0;text-align:center;color:var(--ink-3);font-size:13.5px}
+
+/* ===== 窄屏 ===== */
+@media (max-width:860px){
+  .tally{grid-template-columns:repeat(2,1fr)}
+  .tally .cell:nth-child(3){border-left:none}
+  .tally .cell:nth-child(n+3){border-top:1px solid var(--rule-soft)}
+  .job{max-width:100%;text-align:left}
+  .masthead{align-items:flex-start}
+}
+@media (max-width:600px){
+  .page{padding:20px 14px 44px}
+  .tray{padding:30px 16px}
+  .tray.is-compact{padding:14px 14px}
+  .block-head .hint{display:none}
+  table{min-width:520px}
+  #detailTable{min-width:560px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none !important}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="masthead">
+    <div class="brand">
+      <span class="marks" aria-hidden="true"><i class="c"></i><i class="m"></i><i class="y"></i><i class="k"></i></span>
+      <div>
+        <h1>PDF 页数清点</h1>
+        <p class="tagline">点「选择文件夹」选中打印文件夹，逐个文件夹点清页数与打印量，全程在本机完成，文件不上传。</p>
+      </div>
+    </div>
+    <div class="job">
+      <span class="job-label">当前文件夹</span>
+      <strong id="jobName">未载入</strong>
+    </div>
+  </header>
+
+  <section class="tray" id="tray">
+    <span class="crop tl" aria-hidden="true"></span>
+    <span class="crop tr" aria-hidden="true"></span>
+    <span class="crop br" aria-hidden="true"></span>
+    <span class="crop bl" aria-hidden="true"></span>
+    <div class="tray-inner">
+      <div>
+        <p class="tray-title" id="trayTitle">选中要清点的文件夹</p>
+        <p class="tray-sub" id="traySub">会连子文件夹一起读；只统计 PDF，其他文件不参与计数。</p>
+      </div>
+      <div class="tray-actions">
+        <button class="btn btn-primary" id="pickBtn">选择文件夹</button>
+      </div>
+    </div>
+  </section>
+  <input type="file" id="dirInput" webkitdirectory directory multiple hidden>
+
+  <section id="results" hidden>
+    <div class="tally" id="tally"></div>
+    <p class="status" id="status"></p>
+
+    <div class="block">
+      <div class="block-head">
+        <h2>按文件夹汇总</h2>
+        <span class="hint">点一行可筛选下方明细</span>
+      </div>
+      <div class="table-wrap">
+        <table id="groupTable">
+          <colgroup>
+            <col style="width:36%">
+            <col style="width:11%">
+            <col style="width:14%">
+            <col style="width:15%">
+            <col style="width:24%" class="col-barcell">
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="folder">文件夹</th>
+              <th class="num sortable" data-sort="files">文件</th>
+              <th class="num sortable" data-sort="pages">页数</th>
+              <th class="num sortable" data-sort="printPages">打印页数</th>
+              <th class="col-barcell">占页数比</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="block-head">
+        <h2>逐文件明细</h2>
+        <span class="hint" id="detailHint"></span>
+      </div>
+      <div class="filters" id="filters"></div>
+      <div class="tools" style="margin-bottom:12px">
+        <input class="search" id="search" type="search" placeholder="搜索文件名，例如 Manual">
+        <button class="btn" id="csvBtn">导出明细 CSV</button>
+        <button class="btn btn-primary" id="xlsxBtn">导出 Excel 报表</button>
+      </div>
+      <div class="table-wrap">
+        <table id="detailTable">
+          <colgroup>
+            <col style="width:30%">
+            <col style="width:32%">
+            <col style="width:9%">
+            <col style="width:8%">
+            <col style="width:12%">
+            <col style="width:9%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>文件夹</th>
+              <th>文件</th>
+              <th class="num">页数</th>
+              <th class="num">份数</th>
+              <th class="num">打印页数</th>
+              <th class="num">大小</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="notes">
+      <b>份数</b>取自文件名前缀（如 <span style="font-family:var(--mono)">2份 XXX.pdf</span> 记为 2 份），没有该前缀按 1 份计；
+      打印页数 = 页数 × 份数。<br>
+      <b>页数</b>直接读 PDF 的页面树（交叉引用表 → 页面树 → /Count），不是按文件大小估算。加密文件若页面树被加密，会退化为按页面对象计数并在备注里标出。<br>
+      <b>Excel 报表</b>按当前筛选结果生成：<b>汇总</b>页含按文件夹、按打印方式两段占比，<b>明细</b>页按文件夹分块、组内按打印页数排序，并给出每组小计与总计。<br>
+      所有解析都在你的浏览器里完成，文件不会上传到任何服务器。
+    </p>
+  </section>
+</div>
+
+<script>
+'use strict';
+/* Minimal PDF page counter: xref / ObjStm / predictor aware.
+   Shared verbatim between the Node test harness and the HTML app. */
+
+const WS = (c) => c === 0x00 || c === 0x09 || c === 0x0a || c === 0x0c || c === 0x0d || c === 0x20;
+const DELIM = (c) =>
+  c === 0x28 || c === 0x29 || c === 0x3c || c === 0x3e || c === 0x5b ||
+  c === 0x5d || c === 0x7b || c === 0x7d || c === 0x2f || c === 0x25;
+const DIGIT = (c) => c >= 0x30 && c <= 0x39;
+const ALPHA = (c) => (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a);
+
+function skipWS(B, pos) {
+  const n = B.length;
+  while (pos < n) {
+    const c = B[pos];
+    if (WS(c)) { pos++; continue; }
+    if (c === 0x25) { // % comment
+      while (pos < n && B[pos] !== 0x0a && B[pos] !== 0x0d) pos++;
+      continue;
+    }
+    break;
+  }
+  return pos;
+}
+
+function indexOfBytes(B, str, from) {
+  const n = B.length, m = str.length;
+  if (m === 0) return from;
+  const c0 = str.charCodeAt(0);
+  let i = from < 0 ? 0 : from;
+  while (i <= n - m) {
+    if (B[i] === c0) {
+      let j = 1;
+      while (j < m && B[i + j] === str.charCodeAt(j)) j++;
+      if (j === m) return i;
+    }
+    i++;
+  }
+  return -1;
+}
+
+function lastIndexOfBytes(B, str) {
+  let idx = -1, from = 0;
+  while (true) {
+    const hit = indexOfBytes(B, str, from);
+    if (hit < 0) return idx;
+    idx = hit;
+    from = hit + 1;
+  }
+}
+
+function readNumber(B, pos) {
+  const n = B.length;
+  let s = pos, sign = 1;
+  if (B[pos] === 0x2b) pos++;
+  else if (B[pos] === 0x2d) { sign = -1; pos++; }
+  let val = 0, digits = 0, frac = -1;
+  while (pos < n) {
+    const c = B[pos];
+    if (DIGIT(c)) {
+      val = val * 10 + (c - 0x30);
+      if (frac >= 0) frac++;
+      digits++; pos++;
+    } else if (c === 0x2e) {
+      if (frac >= 0) break;
+      frac = 0; pos++;
+    } else break;
+  }
+  if (digits === 0) return null;
+  if (frac > 0) val = val / Math.pow(10, frac);
+  return { value: sign * val, pos };
+}
+
+function readKeyword(B, pos) {
+  let end = pos;
+  while (end < B.length && !WS(B[end]) && !DELIM(B[end])) end++;
+  return { word: latin1(B, pos, end), pos: end };
+}
+
+function latin1(B, start, end) {
+  end = Math.min(end, B.length);
+  let s = '';
+  for (let i = start; i < end; i++) s += String.fromCharCode(B[i]);
+  return s;
+}
+
+function parseName(B, pos) {
+  // pos at '/'
+  pos++;
+  let name = '';
+  const n = B.length;
+  while (pos < n) {
+    const c = B[pos];
+    if (WS(c) || DELIM(c)) break;
+    if (c === 0x23 && pos + 2 < n) { // #XX
+      const hex = parseInt(latin1(B, pos + 1, pos + 3), 16);
+      if (!isNaN(hex)) { name += String.fromCharCode(hex); pos += 3; continue; }
+    }
+    name += String.fromCharCode(c);
+    pos++;
+  }
+  return { value: { t: 'name', v: name }, pos };
+}
+
+function parseLiteralString(B, pos) {
+  // pos at '('
+  pos++;
+  const n = B.length;
+  let depth = 1, out = '';
+  while (pos < n) {
+    const c = B[pos];
+    if (c === 0x5c) { // backslash
+      const d = B[pos + 1];
+      if (d === 0x6e) out += '\n';
+      else if (d === 0x72) out += '\r';
+      else if (d === 0x74) out += '\t';
+      else if (d === 0x28 || d === 0x29 || d === 0x5c) out += String.fromCharCode(d);
+      else if (d === 0x0a) { /* line continuation */ }
+      else if (DIGIT(d)) { out += latin1(B, pos + 1, pos + 3); pos += 2; }
+      else out += String.fromCharCode(d);
+      pos += 2;
+      continue;
+    }
+    if (c === 0x28) depth++;
+    else if (c === 0x29) { depth--; if (depth === 0) { pos++; break; } }
+    out += String.fromCharCode(c);
+    pos++;
+  }
+  return { value: { t: 'str', v: out }, pos };
+}
+
+function parseHexString(B, pos) {
+  pos++;
+  let hex = '';
+  while (pos < B.length && B[pos] !== 0x3e) { hex += latin1(B, pos, pos + 1); pos++; }
+  pos++;
+  return { value: { t: 'str', v: hex }, pos };
+}
+
+function parseValue(B, pos, depth) {
+  depth = depth || 0;
+  if (depth > 60) throw new Error('nesting too deep');
+  pos = skipWS(B, pos);
+  if (pos >= B.length) return null;
+  const c = B[pos];
+  if (c === 0x3c && B[pos + 1] === 0x3c) return parseDict(B, pos, depth);
+  if (c === 0x3c) return parseHexString(B, pos);
+  if (c === 0x5b) {
+    pos++;
+    const arr = [];
+    while (true) {
+      pos = skipWS(B, pos);
+      if (pos >= B.length) break;
+      if (B[pos] === 0x5d) { pos++; break; }
+      const item = parseValue(B, pos, depth + 1);
+      if (!item) break;
+      arr.push(item.value);
+      pos = item.pos;
+    }
+    return { value: { t: 'arr', v: arr }, pos };
+  }
+  if (c === 0x28) return parseLiteralString(B, pos);
+  if (c === 0x2f) return parseName(B, pos);
+  if (DIGIT(c) || c === 0x2b || c === 0x2d || c === 0x2e) {
+    const num = readNumber(B, pos);
+    if (!num) throw new Error('bad number at ' + pos);
+    let p = skipWS(B, num.pos);
+    // try "gen R"
+    if (DIGIT(B[p])) {
+      const gen = readNumber(B, p);
+      if (gen) {
+        const p2 = skipWS(B, gen.pos);
+        if (B[p2] === 0x52 && (p2 + 1 >= B.length || WS(B[p2 + 1]) || DELIM(B[p2 + 1]))) {
+          return { value: { t: 'ref', v: [num.value, gen.value] }, pos: p2 + 1 };
+        }
+      }
+    }
+    return { value: { t: 'num', v: num.value }, pos: num.pos };
+  }
+  const kw = readKeyword(B, pos);
+  if (kw.word === 'true') return { value: { t: 'bool', v: true }, pos: kw.pos };
+  if (kw.word === 'false') return { value: { t: 'bool', v: false }, pos: kw.pos };
+  if (kw.word === 'null') return { value: { t: 'null' }, pos: kw.pos };
+  throw new Error('unexpected token "' + kw.word + '" at ' + pos);
+}
+
+function parseDict(B, pos, depth) {
+  pos += 2; // <<
+  const map = Object.create(null);
+  const n = B.length;
+  while (true) {
+    pos = skipWS(B, pos);
+    if (pos >= n) break;
+    if (B[pos] === 0x3e && B[pos + 1] === 0x3e) { pos += 2; break; }
+    if (B[pos] !== 0x2f) { // tolerate junk keys
+      const junk = readKeyword(B, pos);
+      if (junk.pos === pos) pos++;
+      else pos = junk.pos;
+      continue;
+    }
+    const key = parseName(B, pos);
+    pos = skipWS(B, key.pos);
+    if (B[pos] === 0x3e) continue;
+    const val = parseValue(B, pos, depth + 1);
+    if (!val) break;
+    map[key.value.v] = val.value;
+    pos = val.pos;
+  }
+  return { value: { t: 'dict', v: map }, pos };
+}
+
+const dictGet = (d, k) => (d && d.t === 'dict' ? d.v[k] : undefined);
+const nameIs = (v, s) => v && v.t === 'name' && v.v === s;
+
+/* ---------- streams and filters ---------- */
+
+async function inflateBytes(data) {
+  const attempts = ['deflate', 'deflate-raw'];
+  let lastErr = null;
+  for (const fmt of attempts) {
+    try {
+      const ds = new DecompressionStream(fmt);
+      const buf = await new Response(new Blob([data]).stream().pipeThrough(ds)).arrayBuffer();
+      return new Uint8Array(buf);
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('inflate failed');
+}
+
+function applyPredictor(data, predictor, columns, colors, bpc) {
+  if (!predictor || predictor <= 1) return data;
+  columns = columns || 1;
+  colors = colors || 1;
+  bpc = bpc || 8;
+  const bytesPerPixel = Math.max(1, Math.ceil((colors * bpc) / 8));
+  const rowLen = Math.ceil((columns * colors * bpc) / 8);
+  if (predictor === 2) return data; // TIFF, rare
+  // PNG predictors (10..15): each row prefixed by filter byte
+  const rows = Math.floor(data.length / (rowLen + 1));
+  const out = new Uint8Array(rows * rowLen);
+  let prev = new Uint8Array(rowLen);
+  for (let r = 0; r < rows; r++) {
+    const ft = data[r * (rowLen + 1)];
+    const off = r * (rowLen + 1) + 1;
+    const cur = data.subarray(off, off + rowLen);
+    const row = new Uint8Array(rowLen);
+    for (let i = 0; i < rowLen; i++) {
+      const raw = cur[i];
+      const left = i >= bytesPerPixel ? row[i - bytesPerPixel] : 0;
+      const up = prev[i];
+      const upLeft = i >= bytesPerPixel ? prev[i - bytesPerPixel] : 0;
+      let val;
+      if (ft === 0) val = raw;
+      else if (ft === 1) val = raw + left;
+      else if (ft === 2) val = raw + up;
+      else if (ft === 3) val = raw + Math.floor((left + up) / 2);
+      else {
+        const p = left + up - upLeft;
+        const pa = Math.abs(p - left), pb = Math.abs(p - up), pc = Math.abs(p - upLeft);
+        val = raw + (pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft);
+      }
+      row[i] = val & 0xff;
+    }
+    out.set(row, r * rowLen);
+    prev = row;
+  }
+  return out;
+}
+
+async function decodeStream(B, dict, start, end) {
+  const raw = B.subarray(start, end);
+  let filter = dictGet(dict, 'Filter');
+  let parms = dictGet(dict, 'DecodeParms');
+  const filters = [];
+  if (filter && filter.t === 'name') filters.push(filter.v);
+  else if (filter && filter.t === 'arr') {
+    for (const f of filter.v) if (f.t === 'name') filters.push(f.v);
+  }
+  let data = raw;
+  for (let i = 0; i < filters.length; i++) {
+    const f = filters[i];
+    let p = parms;
+    if (p && p.t === 'arr') p = p.v[i];
+    if (f === 'FlateDecode' || f === 'Fl') {
+      data = await inflateBytes(data);
+      const pred = p && p.t === 'dict' ? dictGet(p, 'Predictor') : null;
+      if (pred && pred.t === 'num') {
+        const cols = dictGet(p, 'Columns');
+        data = applyPredictor(data, pred.v,
+          cols && cols.t === 'num' ? cols.v : 1,
+          1, 8);
+      }
+    } else if (f === 'ASCIIHexDecode' || f === 'AHx') {
+      let hex = '';
+      for (let k = 0; k < data.length; k++) {
+        const c = data[k];
+        if (c === 0x3e) break;
+        if (!WS(c)) hex += String.fromCharCode(c);
+      }
+      if (hex.length % 2) hex += '0';
+      const out = new Uint8Array(hex.length / 2);
+      for (let k = 0; k < out.length; k++) out[k] = parseInt(hex.substr(k * 2, 2), 16);
+      data = out;
+    } else {
+      throw new Error('unsupported filter ' + f);
+    }
+  }
+  return data;
+}
+
+/* ---------- object access ---------- */
+
+function readStreamBounds(B, pos, dict) {
+  // pos just after dict '>>'
+  pos = skipWS(B, pos);
+  if (B[pos] !== 0x73) return null; // 's' of stream
+  const kw = readKeyword(B, pos);
+  if (kw.word !== 'stream') return null;
+  pos = kw.pos;
+  if (B[pos] === 0x0d) pos++;
+  if (B[pos] === 0x0a) pos++;
+  const lenObj = dictGet(dict, 'Length');
+  let end = -1;
+  if (lenObj && lenObj.t === 'num') {
+    const guess = pos + lenObj.v;
+    const after = indexOfBytes(B, 'endstream', Math.max(guess - 2, pos));
+    if (after >= 0 && after - guess < 40) end = guess;
+  }
+  if (end < 0) {
+    const es = indexOfBytes(B, 'endstream', pos);
+    if (es < 0) return null;
+    end = es;
+    while (end > pos && (B[end - 1] === 0x0a || B[end - 1] === 0x0d || WS(B[end - 1]))) end--;
+  }
+  return { start: pos, end: end };
+}
+
+class PdfDoc {
+  constructor(B) {
+    this.B = B;
+    this.xref = new Map();
+    this.cache = new Map();
+    this.objStmCache = new Map();
+    this.trailer = null;
+    this.mode = 'none';
+  }
+
+  /* ---- xref ---- */
+
+  async loadXref() {
+    const B = this.B;
+    let pos = lastIndexOfBytes(B, 'startxref');
+    if (pos < 0) return false;
+    const num = readNumber(B, skipWS(B, pos + 9));
+    if (!num) return false;
+    let offset = num.value;
+    let guard = 0;
+    let newestTrailer = null;
+    while (offset > 0 && offset < B.length && guard++ < 200) {
+      const p = skipWS(B, offset);
+      let trailer = null;
+      if (B[p] === 0x78 && latin1(B, p, p + 4) === 'xref') {
+        const r = this.parseXrefTable(p, guard === 1);
+        if (!r) break;
+        trailer = r.trailer;
+      } else {
+        const r = await this.parseXrefStream(p);
+        if (!r) break;
+        trailer = r.trailer;
+      }
+      if (!newestTrailer && trailer) newestTrailer = trailer;
+      const prev = trailer ? dictGet(trailer, 'Prev') : null;
+      if (!prev || prev.t !== 'num') break;
+      offset = prev.v;
+    }
+    this.trailer = newestTrailer;
+    this.mode = 'xref';
+    return !!newestTrailer;
+  }
+
+  parseXrefTable(pos, isNewest) {
+    const B = this.B;
+    pos += 4; // 'xref'
+    let p = skipWS(B, pos);
+    const subsections = [];
+    while (true) {
+      p = skipWS(B, p);
+      if (latin1(B, p, p + 7) === 'trailer') break;
+      const start = readNumber(B, p);
+      if (!start) break;
+      p = skipWS(B, start.pos);
+      const count = readNumber(B, p);
+      if (!count) break;
+      p = count.pos;
+      const entries = [];
+      for (let i = 0; i < count.value; i++) {
+        p = skipWS(B, p);
+        const off = readNumber(B, p);
+        if (!off) break;
+        p = skipWS(B, off.pos);
+        const gen = readNumber(B, p);
+        if (!gen) break;
+        p = skipWS(B, gen.pos);
+        const type = B[p];
+        p += 1;
+        entries.push({ off: off.value, gen: gen.value, type: type === 0x6e ? 1 : 0 });
+      }
+      subsections.push({ start: start.value, entries });
+    }
+    for (const s of subsections) {
+      s.entries.forEach((e, i) => {
+        const num = s.start + i;
+        if (e.type === 1 && !this.xref.has(num)) this.xref.set(num, { type: 1, offset: e.off });
+      });
+    }
+    // reading order: newest first wins -> we filled with first-seen (newest) only
+    const tp = skipWS(B, p + 7); // skip the 'trailer' keyword
+    const v = parseValue(B, tp);
+    return { trailer: v && v.value && v.value.t === 'dict' ? v.value : null };
+  }
+
+  async parseXrefStream(pos) {
+    const B = this.B;
+    const objNum = readNumber(B, pos);
+    if (!objNum) return null;
+    let p = skipWS(B, objNum.pos);
+    const genNum = readNumber(B, p);
+    if (!genNum) return null;
+    p = skipWS(B, genNum.pos);
+    const kw = readKeyword(B, p);
+    if (kw.word !== 'obj') return null;
+    const val = parseValue(B, skipWS(B, kw.pos));
+    if (!val || val.value.t !== 'dict') return null;
+    const dict = val.value;
+    const bounds = readStreamBounds(B, val.pos, dict);
+    if (!bounds) return null;
+    const data = await decodeStream(B, dict, bounds.start, bounds.end);
+    const wArr = dictGet(dict, 'W');
+    if (!wArr || wArr.t !== 'arr') return null;
+    const w = wArr.v.map((x) => (x.t === 'num' ? x.v : 0));
+    const sizeObj = dictGet(dict, 'Size');
+    const size = sizeObj && sizeObj.t === 'num' ? sizeObj.v : 0;
+    let indexArr = dictGet(dict, 'Index');
+    let ranges = [];
+    if (indexArr && indexArr.t === 'arr') {
+      for (let i = 0; i + 1 < indexArr.v.length; i += 2) {
+        ranges.push([indexArr.v[i].v, indexArr.v[i + 1].v]);
+      }
+    } else ranges = [[0, size]];
+    const rowLen = w[0] + w[1] + w[2];
+    let dp = 0;
+    for (const [start, count] of ranges) {
+      for (let i = 0; i < count; i++) {
+        if (dp + rowLen > data.length) break;
+        const fields = [];
+        for (let k = 0; k < 3; k++) {
+          let v = 0;
+          for (let b = 0; b < w[k]; b++) v = v * 256 + data[dp++];
+          fields.push(v);
+        }
+        const num = start + i;
+        const type = w[0] === 0 ? 1 : fields[0];
+        if (type === 1 && !this.xref.has(num)) this.xref.set(num, { type: 1, offset: fields[1] });
+        else if (type === 2 && !this.xref.has(num)) this.xref.set(num, { type: 2, stm: fields[1], idx: fields[2] });
+      }
+    }
+    return { trailer: dict };
+  }
+
+  /* ---- objects ---- */
+
+  async fetchObject(num) {
+    if (this.cache.has(num)) return this.cache.get(num);
+    const entry = this.xref.get(num);
+    let result = null;
+    if (entry && entry.type === 1) {
+      result = await this.parseObjectAt(entry.offset, num);
+    } else if (entry && entry.type === 2) {
+      result = await this.fromObjectStream(entry.stm, entry.idx, num);
+    }
+    this.cache.set(num, result);
+    return result;
+  }
+
+  async parseObjectAt(offset, wantNum) {
+    const B = this.B;
+    let p = skipWS(B, offset);
+    const num = readNumber(B, p);
+    if (!num) return null;
+    p = skipWS(B, num.pos);
+    const gen = readNumber(B, p);
+    if (!gen) return null;
+    p = skipWS(B, gen.pos);
+    const kw = readKeyword(B, p);
+    if (kw.word !== 'obj') return null;
+    if (wantNum !== undefined && num.value !== wantNum) { /* tolerate */ }
+    const val = parseValue(B, kw.pos);
+    if (!val) return null;
+    if (val.value.t === 'dict') {
+      const bounds = readStreamBounds(B, val.pos, val.value);
+      if (bounds) return { dict: val.value, stream: bounds, num: num.value };
+    }
+    return { dict: val.value, stream: null, num: num.value };
+  }
+
+  async fromObjectStream(stmNum, idx, num) {
+    const objs = await this.expandObjectStream(stmNum);
+    if (!objs) return null;
+    if (objs.has(num)) return objs.get(num);
+    return null;
+  }
+
+  async expandObjectStream(stmNum) {
+    if (this.objStmCache.has(stmNum)) return this.objStmCache.get(stmNum);
+    let map = null;
+    const stmObj = await this.fetchObject(stmNum);
+    if (stmObj && stmObj.dict && stmObj.stream) {
+      try {
+        const data = await decodeStream(this.B, stmObj.dict, stmObj.stream.start, stmObj.stream.end);
+        const first = dictGet(stmObj.dict, 'First');
+        const nObj = dictGet(stmObj.dict, 'N');
+        const firstOff = first && first.t === 'num' ? first.v : 0;
+        const count = nObj && nObj.t === 'num' ? nObj.v : 0;
+        // header: pairs of "num offset"
+        let p = 0;
+        const pairs = [];
+        for (let i = 0; i < count; i++) {
+          const a = readNumber(data, skipWS(data, p));
+          if (!a) break;
+          p = skipWS(data, a.pos);
+          const b = readNumber(data, p);
+          if (!b) break;
+          p = b.pos;
+          pairs.push([a.value, b.value]);
+        }
+        map = new Map();
+        for (const [onum, ooff] of pairs) {
+          const at = firstOff + ooff;
+          const val = parseValue(data, at);
+          if (val) {
+            let obj = { dict: val.value, stream: null, num: onum };
+            if (val.value.t === 'dict') {
+              const bounds = readStreamBounds(data, val.pos, val.value);
+              if (bounds) obj = { dict: val.value, stream: { start: bounds.start, end: bounds.end, data }, num: onum };
+            }
+            map.set(onum, obj);
+          }
+        }
+      } catch (e) { map = null; }
+    }
+    this.objStmCache.set(stmNum, map);
+    return map;
+  }
+
+  /* ---- pages ---- */
+
+  async resolve(v) {
+    if (!v) return null;
+    if (v.t === 'ref') {
+      const obj = await this.fetchObject(v.v[0]);
+      if (!obj) return null;
+      return { obj, value: obj.dict };
+    }
+    return { obj: null, value: v };
+  }
+
+  async pageCount() {
+    if (!this.trailer) return null;
+    const rootRef = dictGet(this.trailer, 'Root');
+    if (!rootRef) return null;
+    const root = await this.resolve(rootRef);
+    if (!root || !root.value || root.value.t !== 'dict') return null;
+    const pagesRef = dictGet(root.value, 'Pages');
+    if (!pagesRef) return null;
+    const pages = await this.resolve(pagesRef);
+    if (!pages || !pages.value || pages.value.t !== 'dict') return null;
+    const cnt = dictGet(pages.value, 'Count');
+    if (cnt && cnt.t === 'num' && cnt.v > 0) return Math.round(cnt.v);
+    // deeper walk without /Count
+    const total = await this.walkPages(pagesRef, 0);
+    return total || null;
+  }
+
+  async walkPages(nodeRef, depth) {
+    if (depth > 40) return 0;
+    const node = await this.resolve(nodeRef);
+    if (!node || !node.value || node.value.t !== 'dict') return 0;
+    const kids = dictGet(node.value, 'Kids');
+    const type = dictGet(node.value, 'Type');
+    if (nameIs(type, 'Page') && !kids) return 1;
+    if (!kids || kids.t !== 'arr') {
+      const c = dictGet(node.value, 'Count');
+      return c && c.t === 'num' ? c.v : 0;
+    }
+    let total = 0;
+    for (const kid of kids.v) total += await this.walkPages(kid, depth + 1);
+    return total;
+  }
+}
+
+/* ---------- fallbacks ---------- */
+
+function countTypePageTokens(B) {
+  let count = 0, p = 0;
+  while (true) {
+    const hit = indexOfBytes(B, '/Type', p);
+    if (hit < 0) break;
+    p = hit + 5;
+    let q = skipWS(B, p);
+    if (B[q] !== 0x2f) continue;
+    const nm = parseName(B, q);
+    const word = nm.value.v;
+    if (word === 'Page') {
+      const after = skipWS(B, nm.pos);
+      // must not be followed by more name chars (already delimited by parser)
+      if (!(ALPHA(B[after]))) count++;
+    }
+  }
+  return count;
+}
+
+async function getPdfPageCount(arrayBuffer) {
+  const B = arrayBuffer instanceof Uint8Array ? arrayBuffer : new Uint8Array(arrayBuffer);
+  const doc = new PdfDoc(B);
+  let pages = null;
+  let method = '';
+  try {
+    const ok = await doc.loadXref();
+    if (ok) {
+      pages = await doc.pageCount();
+      if (pages) method = 'xref';
+    }
+  } catch (e) { /* fall through */ }
+  if (!pages) {
+    try {
+      pages = countTypePageTokens(B);
+      if (pages > 0) method = 'scan';
+    } catch (e) { pages = null; }
+  }
+  return { pages, method };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { getPdfPageCount };
+}
+
+/* ===== xlsx 写入内核 ===== */
+/* xlsx 写入内核：把报表数据直接打成 .xlsx（store 模式 ZIP + OOXML），不依赖任何库。
+   纯函数，无 DOM 依赖，浏览器与 Node 共用。 */
+var XLSX_CORE = (function () {
+  "use strict";
+
+  var INK = "FF1F2328";
+  var INK2 = "FF4B5563";
+  var GRAY = "FF6B7280";
+  var ACCENT = "FFBD2B60";
+  var HEAD_FILL = "FFF1F2EE";
+  var SUB_FILL = "FFF8F9F6";
+  var BAND = "FFF7E9EE";
+  var TOT_FILL = "FFEDEFE9";
+
+  /* ---------- 工具 ---------- */
+
+  function xsl(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  }
+
+  function colLetter(n) {
+    var s = "";
+    while (n > 0) {
+      var m = (n - 1) % 26;
+      s = String.fromCharCode(65 + m) + s;
+      n = Math.floor((n - 1) / 26);
+    }
+    return s;
+  }
+
+  function utf8(str) {
+    return new TextEncoder().encode(str);
+  }
+
+  var CRC_TABLE = (function () {
+    var t = new Uint32Array(256);
+    for (var n = 0; n < 256; n++) {
+      var c = n;
+      for (var k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+
+  function crc32(u8) {
+    var c = 0xffffffff;
+    for (var i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  }
+
+  /* ---------- ZIP（store，无压缩） ---------- */
+
+  function zipStore(files) {
+    var now = new Date();
+    var dosTime = ((now.getHours() & 31) << 11) | ((now.getMinutes() & 63) << 5) | ((now.getSeconds() / 2) & 31);
+    var dosDate = (((now.getFullYear() - 1980) & 127) << 9) | (((now.getMonth() + 1) & 15) << 5) | (now.getDate() & 31);
+
+    var chunks = [];
+    var central = [];
+    var offset = 0;
+
+    for (var i = 0; i < files.length; i++) {
+      var name = utf8(files[i].name);
+      var data = utf8(files[i].text);
+      var crc = crc32(data);
+
+      var head = new Uint8Array(30 + name.length);
+      var hv = new DataView(head.buffer);
+      hv.setUint32(0, 0x04034b50, true);
+      hv.setUint16(4, 20, true);
+      hv.setUint16(6, 0x0800, true);
+      hv.setUint16(8, 0, true);
+      hv.setUint16(10, dosTime, true);
+      hv.setUint16(12, dosDate, true);
+      hv.setUint32(14, crc, true);
+      hv.setUint32(18, data.length, true);
+      hv.setUint32(22, data.length, true);
+      hv.setUint16(26, name.length, true);
+      hv.setUint16(28, 0, true);
+      head.set(name, 30);
+
+      chunks.push(head, data);
+
+      var cen = new Uint8Array(46 + name.length);
+      var cv = new DataView(cen.buffer);
+      cv.setUint32(0, 0x02014b50, true);
+      cv.setUint16(4, 20, true);
+      cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0x0800, true);
+      cv.setUint16(10, 0, true);
+      cv.setUint16(12, dosTime, true);
+      cv.setUint16(14, dosDate, true);
+      cv.setUint32(16, crc, true);
+      cv.setUint32(20, data.length, true);
+      cv.setUint32(24, data.length, true);
+      cv.setUint16(28, name.length, true);
+      cv.setUint32(42, offset, true);
+      cen.set(name, 46);
+      central.push(cen);
+
+      offset += head.length + data.length;
+    }
+
+    var cdSize = 0;
+    for (var j = 0; j < central.length; j++) cdSize += central[j].length;
+
+    var end = new Uint8Array(22);
+    var ev = new DataView(end.buffer);
+    ev.setUint32(0, 0x06054b50, true);
+    ev.setUint16(8, files.length, true);
+    ev.setUint16(10, files.length, true);
+    ev.setUint32(12, cdSize, true);
+    ev.setUint32(16, offset, true);
+
+    var total = offset + cdSize + 22;
+    var out = new Uint8Array(total);
+    var p = 0;
+    for (var a = 0; a < chunks.length; a++) { out.set(chunks[a], p); p += chunks[a].length; }
+    for (var b = 0; b < central.length; b++) { out.set(central[b], p); p += central[b].length; }
+    out.set(end, p);
+    return out;
+  }
+
+  /* ---------- 样式表 ---------- */
+
+  var FONTS = [
+    '<font><sz val="11"/><color rgb="' + INK + '"/><name val="微软雅黑"/></font>',
+    '<font><b/><sz val="17"/><color rgb="FFFFFFFF"/><name val="微软雅黑"/></font>',
+    '<font><sz val="9.5"/><color rgb="' + GRAY + '"/><name val="微软雅黑"/></font>',
+    '<font><b/><sz val="11.5"/><color rgb="' + INK + '"/><name val="微软雅黑"/></font>',
+    '<font><sz val="9"/><color rgb="' + GRAY + '"/><name val="微软雅黑"/></font>',
+    '<font><b/><sz val="10"/><color rgb="' + INK2 + '"/><name val="微软雅黑"/></font>',
+    '<font><sz val="10"/><color rgb="' + INK + '"/><name val="微软雅黑"/></font>',
+    '<font><sz val="10"/><color rgb="' + INK + '"/><name val="Arial"/></font>',
+    '<font><b/><sz val="10"/><color rgb="' + INK + '"/><name val="Arial"/></font>',
+    '<font><b/><sz val="10"/><color rgb="' + INK + '"/><name val="微软雅黑"/></font>',
+    '<font><b/><sz val="9.5"/><color rgb="' + ACCENT + '"/><name val="微软雅黑"/></font>',
+    '<font><sz val="9.5"/><color rgb="' + INK + '"/><name val="微软雅黑"/></font>',
+    '<font><sz val="9.5"/><color rgb="' + INK + '"/><name val="Arial"/></font>',
+    '<font><b/><sz val="9.5"/><color rgb="' + INK + '"/><name val="Arial"/></font>',
+    '<font><b/><sz val="9.5"/><color rgb="' + INK2 + '"/><name val="微软雅黑"/></font>',
+    '<font><sz val="9.5"/><color rgb="' + GRAY + '"/><name val="微软雅黑"/></font>'
+  ];
+
+  var FILLS = [
+    '<fill><patternFill patternType="none"/></fill>',
+    '<fill><patternFill patternType="gray125"/></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="' + INK + '"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="' + ACCENT + '"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="' + HEAD_FILL + '"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="' + SUB_FILL + '"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="' + BAND + '"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="' + TOT_FILL + '"/><bgColor indexed="64"/></patternFill></fill>'
+  ];
+
+  var BORDERS = [
+    '<border><left/><right/><top/><bottom/><diagonal/></border>',
+    '<border><left/><right/><top/><bottom style="thin"><color rgb="' + INK + '"/></bottom><diagonal/></border>',
+    '<border><left/><right/><top style="thin"><color rgb="' + INK + '"/></top><bottom/><diagonal/></border>',
+    '<border><left/><right/><top style="thin"><color rgb="FFC9CEC7"/></top><bottom/><diagonal/></border>'
+  ];
+
+  /* [字体, 填充, 边框, 数字格式, 水平对齐, 自动换行] */
+  var XFS = [
+    [0, 0, 0, 0, "", 0],           // 0 默认
+    [1, 2, 0, 0, "center", 0],     // 1 标题
+    [0, 3, 0, 0, "", 0],           // 2 品红分隔线
+    [2, 0, 0, 0, "left", 0],       // 3 副标题
+    [3, 0, 0, 0, "left", 0],       // 4 分区标题
+    [4, 0, 0, 0, "right", 0],      // 5 分区右侧说明
+    [5, 4, 1, 0, "left", 1],       // 6 表头（左）
+    [5, 4, 1, 0, "right", 1],      // 7 表头（右）
+    [6, 0, 0, 0, "left", 0],       // 8 正文
+    [7, 0, 0, 164, "right", 0],    // 9 数字
+    [8, 0, 0, 164, "right", 0],    // 10 数字加粗
+    [7, 0, 0, 165, "right", 0],    // 11 百分比
+    [9, 5, 2, 0, "left", 0],       // 12 合计标签
+    [8, 5, 2, 164, "right", 0],    // 13 合计数字
+    [8, 5, 2, 165, "right", 0],    // 14 合计百分比
+    [10, 6, 0, 0, "center", 1],    // 15 明细文件夹栏
+    [11, 0, 0, 0, "left", 1],      // 16 明细文件名
+    [12, 0, 0, 164, "right", 0],   // 17 明细数字
+    [13, 0, 0, 164, "right", 0],   // 18 明细数字加粗
+    [14, 5, 3, 0, "left", 0],      // 19 小计标签
+    [15, 5, 3, 0, "left", 0],      // 20 小计说明
+    [13, 5, 3, 164, "right", 0],   // 21 小计数字
+    [15, 0, 0, 0, "left", 1],      // 22 口径说明
+    [9, 7, 2, 0, "left", 0],       // 23 总计标签
+    [8, 7, 2, 164, "right", 0]     // 24 总计数字
+  ];
+
+  function stylesXml() {
+    var x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+    x += '<numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0"/><numFmt numFmtId="165" formatCode="0.0%"/></numFmts>';
+    x += '<fonts count="' + FONTS.length + '">' + FONTS.join("") + '</fonts>';
+    x += '<fills count="' + FILLS.length + '">' + FILLS.join("") + '</fills>';
+    x += '<borders count="' + BORDERS.length + '">' + BORDERS.join("") + '</borders>';
+    x += '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>';
+    x += '<cellXfs count="' + XFS.length + '">';
+    for (var i = 0; i < XFS.length; i++) {
+      var f = XFS[i];
+      x += '<xf numFmtId="' + f[3] + '" fontId="' + f[0] + '" fillId="' + f[1] + '" borderId="' + f[2] + '" xfId="0"';
+      if (f[3]) x += ' applyNumberFormat="1"';
+      if (f[0]) x += ' applyFont="1"';
+      if (f[1]) x += ' applyFill="1"';
+      if (f[2]) x += ' applyBorder="1"';
+      if (f[4] || f[5]) {
+        x += ' applyAlignment="1"><alignment horizontal="' + (f[4] || "general") +
+          '" vertical="center"' + (f[5] ? ' wrapText="1"' : "") + '/></xf>';
+      } else {
+        x += '/>';
+      }
+    }
+    x += '</cellXfs>';
+    x += '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>';
+    x += '<dxfs count="0"/><tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>';
+    x += '</styleSheet>';
+    return x;
+  }
+
+  /* ---------- 工作表 ---------- */
+
+  function cellXml(ref, st, value) {
+    if (value === null || value === undefined || value === "") {
+      return '<c r="' + ref + '" s="' + st + '"/>';
+    }
+    if (typeof value === "number") {
+      var v = Number.isFinite(value) ? Math.round(value * 1e6) / 1e6 : "";
+      return '<c r="' + ref + '" s="' + st + '"><v>' + v + '</v></c>';
+    }
+    return '<c r="' + ref + '" s="' + st + '" t="inlineStr"><is><t xml:space="preserve">' + xsl(value) + '</t></is></c>';
+  }
+
+  function sheetXml(opt) {
+    var x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">';
+    if (opt.tab) x += '<sheetPr><tabColor rgb="' + opt.tab + '"/></sheetPr>';
+    x += '<sheetViews><sheetView' + (opt.selected ? ' tabSelected="1"' : '') + ' showGridLines="0" workbookViewId="0">';
+    if (opt.freeze) {
+      x += '<pane ySplit="' + opt.freeze + '" topLeftCell="' + opt.freezeCell +
+        '" activePane="bottomLeft" state="frozen"/>' +
+        '<selection pane="bottomLeft" activeCell="' + opt.freezeCell + '" sqref="' + opt.freezeCell + '"/>';
+    }
+    x += '</sheetView></sheetViews>';
+    x += '<sheetFormatPr defaultRowHeight="15"/>';
+
+    var cols = "";
+    for (var c = 0; c < opt.cols.length; c++) {
+      cols += '<col min="' + opt.cols[c][0] + '" max="' + opt.cols[c][1] + '" width="' +
+        opt.cols[c][2] + '" customWidth="1"/>';
+    }
+    x += '<cols>' + cols + '</cols>';
+
+    x += '<sheetData>';
+    for (var i = 0; i < opt.rows.length; i++) {
+      var row = opt.rows[i];
+      var cells = "";
+      for (var j = 0; j < row.cells.length; j++) {
+        var cell = row.cells[j];
+        cells += cellXml(colLetter(cell[0]) + row.r, cell[1], cell[2]);
+      }
+      x += '<row r="' + row.r + '"' + (row.ht ? ' ht="' + row.ht + '" customHeight="1"' : "") +
+        (cells ? ">" + cells + "</row>" : "/>");
+    }
+    x += '</sheetData>';
+
+    if (opt.merges && opt.merges.length) {
+      x += '<mergeCells count="' + opt.merges.length + '">';
+      for (var m = 0; m < opt.merges.length; m++) x += '<mergeCell ref="' + opt.merges[m] + '"/>';
+      x += '</mergeCells>';
+    }
+
+    x += '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>';
+    x += '</worksheet>';
+    return x;
+  }
+
+  /* ---------- 取数 ---------- */
+
+  function dw(text) {
+    var w = 0;
+    var s = String(text || "");
+    for (var i = 0; i < s.length; i++) {
+      var code = s.charCodeAt(i);
+      w += code >= 0x2e80 && code <= 0x9fff || code >= 0xff00 && code <= 0xffef ? 2 : 1;
+    }
+    return w;
+  }
+
+  function stripPrefix(name, copies) {
+    var m = /^(\d+)\s*份\s*/.exec(name);
+    if (m && m[0].length < name.length && parseInt(m[1], 10) === copies) return name.slice(m[0].length);
+    return name;
+  }
+
+  function groupData(rows) {
+    var order = [];
+    var map = Object.create(null);
+    for (var i = 0; i < rows.length; i++) {
+      var key = rows[i].group || "(根目录)";
+      if (!map[key]) { map[key] = []; order.push(key); }
+      map[key].push(rows[i]);
+    }
+    var out = [];
+    for (var g = 0; g < order.length; g++) {
+      var list = map[order[g]].slice().sort(function (a, b) {
+        var pa = a.printPages === null ? -1 : a.printPages;
+        var pb = b.printPages === null ? -1 : b.printPages;
+        if (pb !== pa) return pb - pa;
+        return a.file.localeCompare(b.file, "zh-Hans-CN");
+      });
+      var pages = 0, pp = 0, copies = 0;
+      for (var k = 0; k < list.length; k++) {
+        if (list[k].pages !== null) pages += list[k].pages;
+        if (list[k].printPages !== null) pp += list[k].printPages;
+        copies += list[k].copies || 0;
+      }
+      out.push({ folder: order[g], rows: list, n: list.length, pages: pages, pp: pp, copies: copies });
+    }
+    return out;
+  }
+
+  function wayData(rows) {
+    var ways = [];
+    var defs = [
+      ["彩色单面（含过塑、裁切）", ["彩色单面"]],
+      ["彩色双面（打孔、装订）", ["彩色双面"]],
+      ["黑白双面（打孔、装订）", ["黑白双面"]]
+    ];
+    for (var d = 0; d < defs.length; d++) {
+      var n = 0, pages = 0, pp = 0, hit = false;
+      for (var i = 0; i < rows.length; i++) {
+        var hitKey = false;
+        for (var j = 0; j < defs[d][1].length; j++) {
+          if ((rows[i].group || "").indexOf(defs[d][1][j]) >= 0) hitKey = true;
+        }
+        if (!hitKey) continue;
+        hit = true;
+        n++;
+        if (rows[i].pages !== null) pages += rows[i].pages;
+        if (rows[i].printPages !== null) pp += rows[i].printPages;
+      }
+      if (hit) ways.push({ label: defs[d][0], n: n, pages: pages, pp: pp });
+    }
+    return ways;
+  }
+
+  /* ---------- 生成工作簿 ---------- */
+
+  function build(data) {
+    var rows = data.rows;
+    var groups = groupData(rows);
+    var ways = wayData(rows);
+
+    var totalFiles = rows.length;
+    var totalPages = 0, totalPP = 0, totalCopies = 0, failed = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].pages === null) failed++;
+      else totalPages += rows[i].pages;
+      if (rows[i].printPages !== null) totalPP += rows[i].printPages;
+      totalCopies += rows[i].copies || 0;
+    }
+
+    var fmtNum = function (n) { return n.toLocaleString("en-US"); };
+
+    /* ------- 汇总 ------- */
+    var s1 = { r: [], merges: [], cols: [[1, 1, 34], [2, 2, 11], [3, 3, 11], [4, 4, 13], [5, 5, 20]] };
+    var r = 0;
+
+    r = 1; s1.r.push({ r: r, ht: 8, cells: [] });
+    r = 2; s1.r.push({ r: r, ht: 34, cells: [[1, 1, data.rootName ? "PDF 页数清点 · " + data.rootName : "PDF 页数清点"]] });
+    s1.merges.push("A2:E2");
+    r = 3; s1.r.push({ r: r, ht: 20, cells: [[1, 3, data.meta || ""]] });
+    s1.merges.push("A3:E3");
+    r = 4; s1.r.push({ r: r, ht: 4, cells: [[1, 2, ""]] });
+    s1.merges.push("A4:E4");
+    r = 5; s1.r.push({ r: r, ht: 12, cells: [] });
+
+    r = 6; s1.r.push({ r: r, ht: 22, cells: [[1, 4, "按文件夹汇总"], [3, 5, "占比按打印页数计算"]] });
+    s1.merges.push("C6:E6");
+
+    r = 7; s1.r.push({ r: r, ht: 24, cells: [[1, 6, "文件夹"], [2, 7, "文件数"], [3, 7, "页数"], [4, 7, "打印页数"], [5, 7, "占打印页数"]] });
+
+    var first = 8;
+    for (var g = 0; g < groups.length; g++) {
+      r++;
+      var gp = groups[g];
+      s1.r.push({ r: r, ht: 26, cells: [
+        [1, 8, gp.folder],
+        [2, 9, gp.n],
+        [3, 9, gp.pages],
+        [4, 10, gp.pp],
+        [5, 11, totalPP ? gp.pp / totalPP : 0]
+      ] });
+    }
+    r++;
+    s1.r.push({ r: r, ht: 24, cells: [
+      [1, 12, "合计"], [2, 13, totalFiles], [3, 13, totalPages], [4, 13, totalPP], [5, 14, 1]
+    ] });
+
+    r += 2;
+    s1.r.push({ r: r, ht: 22, cells: [[1, 4, "按打印方式"]] });
+
+    r++;
+    s1.r.push({ r: r, ht: 24, cells: [[1, 6, "打印方式"], [2, 7, "文件数"], [3, 7, "页数"], [4, 7, "打印页数"], [5, 7, "占打印页数"]] });
+
+    for (var w = 0; w < ways.length; w++) {
+      r++;
+      s1.r.push({ r: r, ht: 22, cells: [
+        [1, 8, ways[w].label], [2, 9, ways[w].n], [3, 9, ways[w].pages],
+        [4, 10, ways[w].pp], [5, 11, totalPP ? ways[w].pp / totalPP : 0]
+      ] });
+    }
+
+    r += 2;
+    s1.r.push({ r: r, ht: 18, cells: [[1, 3, "口径说明"]] });
+    var notes = [
+      "口径：页数 = PDF 实际页数；打印页数 = 页数 × 份数。",
+      "份数取自文件名前缀「N 份」，无前缀记 1 份；该前缀在明细中已拆到份数列。",
+      "明细组内按打印页数从多到少排列；小计与合计按同一口径汇总。",
+      failed ? failed + " 个文件未能解析页数，已在小计中排除。" : "全部 " + totalFiles + " 个文件读取成功，无解析失败。",
+      "数据由「PDF 页数清点」在本机浏览器内解析生成，文件未上传。"
+    ];
+    for (var n2 = 0; n2 < notes.length; n2++) {
+      r++;
+      s1.r.push({ r: r, ht: 18, cells: [[1, 22, notes[n2]]] });
+      s1.merges.push("A" + r + ":E" + r);
+    }
+
+    /* ------- 明细 ------- */
+    var s2 = { r: [], merges: [], cols: [[1, 1, 26], [2, 2, 50], [3, 3, 9], [4, 4, 8], [5, 5, 12]] };
+    var rr = 0;
+
+    rr = 1; s2.r.push({ r: rr, ht: 8, cells: [] });
+    rr = 2; s2.r.push({ r: rr, ht: 34, cells: [[1, 1, "逐文件明细 · " + totalFiles + " 个 PDF，共 " + fmtNum(totalPages) + " 页"]] });
+    s2.merges.push("A2:E2");
+    rr = 3; s2.r.push({ r: rr, ht: 20, cells: [[1, 3, "组内按打印页数从多到少；每个文件夹末尾为该组小计"]] });
+    s2.merges.push("A3:E3");
+    rr = 4; s2.r.push({ r: rr, ht: 4, cells: [[1, 2, ""]] });
+    s2.merges.push("A4:E4");
+    rr = 5; s2.r.push({ r: rr, ht: 24, cells: [[1, 6, "文件夹"], [2, 6, "PDF 文件"], [3, 7, "页数"], [4, 7, "份数"], [5, 7, "打印页数"]] });
+
+    for (var g2 = 0; g2 < groups.length; g2++) {
+      var grp = groups[g2];
+      var start = rr + 1;
+      for (var k2 = 0; k2 < grp.rows.length; k2++) {
+        rr++;
+        var row = grp.rows[k2];
+        var shown = stripPrefix(row.file, row.copies);
+        var lines = Math.max(1, Math.ceil(dw(shown) / 48));
+        if (k2 === 0) {
+          s2.r.push({ r: rr, ht: 15 + 12.5 * lines, cells: [[1, 15, grp.folder], [2, 16, shown], [3, 17, row.pages === null ? "—" : row.pages], [4, 17, row.copies], [5, 18, row.printPages === null ? "—" : row.printPages]] });
+        } else {
+          s2.r.push({ r: rr, ht: 15 + 12.5 * lines, cells: [[2, 16, shown], [3, 17, row.pages === null ? "—" : row.pages], [4, 17, row.copies], [5, 18, row.printPages === null ? "—" : row.printPages]] });
+        }
+      }
+      s2.merges.push("A" + start + ":A" + rr);
+
+      rr++;
+      s2.r.push({ r: rr, ht: 22, cells: [
+        [1, 19, "小计"], [2, 20, grp.n + " 个文件"], [3, 21, grp.pages], [4, 21, grp.copies], [5, 21, grp.pp]
+      ] });
+    }
+
+    rr++;
+    s2.r.push({ r: rr, ht: 24, cells: [
+      [1, 23, "合计"], [2, 23, totalFiles + " 个 PDF"], [3, 24, totalPages], [4, 24, totalCopies], [5, 24, totalPP]
+    ] });
+
+    /* ------- 打包 ------- */
+    var files = [
+      { name: "[Content_Types].xml", text: contentTypes() },
+      { name: "_rels/.rels", text: rootRels() },
+      { name: "xl/workbook.xml", text: workbookXml(data.sheet1Name, data.sheet2Name) },
+      { name: "xl/_rels/workbook.xml.rels", text: workbookRels() },
+      { name: "xl/styles.xml", text: stylesXml() },
+      { name: "xl/worksheets/sheet1.xml", text: sheetXml({ cols: s1.cols, rows: s1.r, merges: s1.merges, tab: "FF1F2328", selected: true }) },
+      { name: "xl/worksheets/sheet2.xml", text: sheetXml({ cols: s2.cols, rows: s2.r, merges: s2.merges, tab: "FFBD2B60", freeze: 5, freezeCell: "A6" }) }
+    ];
+
+    return zipStore(files);
+  }
+
+  function contentTypes() {
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+      '<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      '</Types>';
+  }
+
+  function rootRels() {
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '</Relationships>';
+  }
+
+  function workbookXml(name1, name2) {
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<bookViews><workbookView xWindow="0" yWindow="0" windowWidth="24000" windowHeight="12000"/></bookViews>' +
+      '<sheets><sheet name="' + xsl(name1 || "汇总") + '" sheetId="1" r:id="rId1"/>' +
+      '<sheet name="' + xsl(name2 || "明细") + '" sheetId="2" r:id="rId2"/></sheets>' +
+      '<calcPr calcId="191029"/>' +
+      '</workbook>';
+  }
+
+  function workbookRels() {
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>' +
+      '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '</Relationships>';
+  }
+
+  return { build: build, zipStore: zipStore, crc32: crc32 };
+})();
+
+if (typeof module !== "undefined" && module.exports) module.exports = XLSX_CORE;
+
+/* ===== 应用逻辑 ===== */
+(function () {
+  "use strict";
+
+  var state = {
+    rootName: "",
+    entries: [],
+    groups: [],
+    ignored: 0,
+    encrypted: 0,
+    filter: "(all)",
+    query: "",
+    sortKey: "pages",
+    sortDir: -1,
+    busy: false
+  };
+
+  function $(id) { return document.getElementById(id); }
+
+  function fmt(n) {
+    return (typeof n === "number" && isFinite(n)) ? n.toLocaleString("en-US") : "—";
+  }
+
+  function parseCopies(name) {
+    var m = /^(\d+)\s*份/.exec(name);
+    if (!m) return 1;
+    var n = parseInt(m[1], 10);
+    return n > 0 ? n : 1;
+  }
+
+  function baseName(p) {
+    var i = p.lastIndexOf("/");
+    return i < 0 ? p : p.slice(i + 1);
+  }
+
+  function dirName(p) {
+    var i = p.lastIndexOf("/");
+    return i <= 0 ? "" : p.slice(0, i);
+  }
+
+  function groupLabel(g) { return g || "(根目录)"; }
+
+  function marksFor(name) {
+    var marks = [];
+    if (name.indexOf("彩色") >= 0) marks = ["c", "m", "y"];
+    else if (name.indexOf("黑白") >= 0) marks = ["k"];
+    if (!marks.length) return "";
+    var s = '<span class="chipmarks" aria-hidden="true">';
+    for (var i = 0; i < marks.length; i++) s += '<i class="' + marks[i] + '"></i>';
+    return s + "</span>";
+  }
+
+  /* ---------- 载入 ---------- */
+
+  function showTrayCompact(name) {
+    var tray = $("tray");
+    tray.classList.add("is-compact");
+    $("trayTitle").textContent = "已载入 " + name + "，可以再选一个文件夹";
+    $("pickBtn").textContent = "换一个文件夹";
+  }
+
+  async function walkDirHandle(handle, prefix, out) {
+    for await (var pair of handle.entries()) {
+      var name = pair[0], h = pair[1];
+      if (h.kind === "file") {
+        var f = await h.getFile();
+        out.push({ file: f, path: prefix + name });
+      } else {
+        await walkDirHandle(h, prefix + name + "/", out);
+      }
+    }
+  }
+
+  function setBusy(on, text) {
+    state.busy = on;
+    $("pickBtn").disabled = on;
+    if (text) $("trayTitle").textContent = text;
+  }
+
+  async function loadFromHandles(handles, rootName) {
+    if (state.busy) return;
+    setBusy(true, "正在读取文件夹…");
+    var out = [];
+    try {
+      for (var i = 0; i < handles.length; i++) {
+        await walkDirHandle(handles[i], handles[i].name + "/", out);
+      }
+    } catch (e) { /* 同上 */ }
+    await loadFiles(out, rootName);
+  }
+
+  async function loadFiles(items, rootName) {
+    var pdfs = [];
+    var ignored = 0;
+    for (var i = 0; i < items.length; i++) {
+      var p = items[i].path || items[i].file.name;
+      if (/\.pdf$/i.test(p)) pdfs.push({ file: items[i].file, path: p });
+      else ignored++;
+    }
+    pdfs.sort(function (a, b) { return a.path.localeCompare(b.path, "zh-Hans-CN"); });
+
+    state.rootName = rootName || "";
+    state.ignored = ignored;
+    state.entries = [];
+    state.encrypted = 0;
+    $("jobName").textContent = state.rootName || "未命名";
+
+    if (!pdfs.length) {
+      $("results").hidden = true;
+      setBusy(false, "这个文件夹里没有 PDF 文件");
+      $("traySub").textContent = "读到 " + items.length + " 个文件，其中没有 .pdf。";
+      return;
+    }
+
+    $("traySub").textContent = "会连子文件夹一起读；只统计 PDF，其他文件不参与计数。";
+    showTrayCompact(state.rootName || "所选文件夹");
+
+    var rows = [];
+    var t0 = performance.now();
+    for (var k = 0; k < pdfs.length; k++) {
+      var item = pdfs[k];
+      $("trayTitle").textContent = "正在读取 " + (k + 1) + " / " + pdfs.length + "：" + item.file.name;
+      var pages = null, note = "";
+      try {
+        var buf = await item.file.arrayBuffer();
+        var res = await getPdfPageCount(new Uint8Array(buf));
+        pages = res.pages;
+        if (pages === null) note = "无法解析页面树";
+      } catch (e) {
+        note = "读取失败：" + (e && e.message ? e.message : "未知原因");
+      }
+      var fname = baseName(item.path);
+      var copies = parseCopies(fname);
+      rows.push({
+        path: item.path,
+        group: dirName(item.path),
+        file: fname,
+        pages: pages,
+        copies: copies,
+        printPages: pages === null ? null : pages * copies,
+        sizeKb: item.file.size / 1024,
+        note: note
+      });
+      await new Promise(function (r) { setTimeout(r, 0); });
+    }
+
+    state.entries = rows;
+    state.groups = buildGroups(rows);
+    state.filter = "(all)";
+    state.query = "";
+    $("search").value = "";
+    $("results").hidden = false;
+    setBusy(false);
+    $("trayTitle").textContent = "已载入 " + (state.rootName || "所选文件夹") + "，可以再选一个文件夹";
+    render();
+    console.log("scan finished in", Math.round(performance.now() - t0), "ms");
+  }
+
+  function buildGroups(rows) {
+    var map = Object.create(null);
+    var order = [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var g = groupLabel(r.group);
+      if (!map[g]) {
+        map[g] = { label: g, files: 0, pages: 0, printPages: 0, failed: 0, order: order.length };
+        order.push(g);
+      }
+      var it = map[g];
+      it.files++;
+      if (r.pages === null) it.failed++;
+      else { it.pages += r.pages; it.printPages += r.printPages; }
+    }
+    return order.map(function (g) { return map[g]; });
+  }
+
+  /* ---------- 渲染 ---------- */
+
+  function totals() {
+    var t = { files: 0, pages: 0, printPages: 0, failed: 0, groups: state.groups.length };
+    for (var i = 0; i < state.entries.length; i++) {
+      var r = state.entries[i];
+      t.files++;
+      if (r.pages === null) t.failed++;
+      else { t.pages += r.pages; t.printPages += r.printPages; }
+    }
+    return t;
+  }
+
+  function render() {
+    renderTally();
+    renderStatus();
+    renderGroups();
+    renderFilters();
+    renderDetail();
+  }
+
+  function renderTally() {
+    var t = totals();
+    var cells = [
+      { num: fmt(t.files), cap: "个 PDF 文件" },
+      { num: fmt(t.pages), cap: "页（原始页数）" },
+      { num: fmt(t.printPages), cap: "页（按份数折算）" },
+      { num: fmt(t.groups), cap: "个文件夹分组" }
+    ];
+    var html = "";
+    for (var i = 0; i < cells.length; i++) {
+      html += '<div class="cell"><span class="num">' + cells[i].num + "</span>" +
+        '<span class="cap">' + cells[i].cap + "</span></div>";
+    }
+    $("tally").innerHTML = html;
+  }
+
+  function renderStatus() {
+    var t = totals();
+    var bits = [];
+    bits.push('<span><span class="dot"></span>已读取 ' + fmt(t.files) + " 个 PDF</span>");
+    if (state.ignored) bits.push('<span><span class="dot"></span>跳过 ' + fmt(state.ignored) + " 个非 PDF 文件</span>");
+    if (t.failed) bits.push('<span class="warn"><span class="dot"></span>' + fmt(t.failed) + " 个文件未能读出页数</span>");
+    else bits.push('<span><span class="dot"></span>全部解析成功</span>');
+    $("status").innerHTML = bits.join("");
+  }
+
+  function sortedGroups() {
+    var arr = state.groups.slice();
+    var key = state.sortKey;
+    var dir = state.sortDir;
+    arr.sort(function (a, b) {
+      var va, vb;
+      if (key === "folder") { va = a.label; vb = b.label; return va.localeCompare(vb, "zh-Hans-CN") * dir; }
+      va = a[key]; vb = b[key];
+      if (va === vb) return a.order - b.order;
+      return (va - vb) * dir;
+    });
+    return arr;
+  }
+
+  function renderGroups() {
+    var t = totals();
+    var arr = sortedGroups();
+    var maxPages = 1;
+    for (var i = 0; i < arr.length; i++) if (arr[i].pages > maxPages) maxPages = arr[i].pages;
+
+    var html = "";
+    for (var j = 0; j < arr.length; j++) {
+      var g = arr[j];
+      var pct = t.pages ? (g.pages / t.pages * 100) : 0;
+      var on = state.filter === g.label ? " is-on" : "";
+      html +=
+        '<tr class="grow' + on + '" data-group="' + esc(g.label) + '">' +
+        '<td><span class="folder">' + marksFor(g.label) +
+        '<span class="name" title="' + esc(g.label) + '">' + esc(g.label) + "</span></span></td>" +
+        '<td class="num">' + fmt(g.files) + "</td>" +
+        '<td class="num">' + fmt(g.pages) + "</td>" +
+        '<td class="num">' + fmt(g.printPages) + "</td>" +
+        '<td class="col-barcell"><span class="bar"><span class="track">' +
+        '<span class="fill" style="width:' + (g.pages / maxPages * 100).toFixed(1) + '%"></span></span>' +
+        '<span class="pct">' + pct.toFixed(pct >= 10 ? 0 : 1) + "%</span></span></td>" +
+        "</tr>";
+    }
+    if (!html) html = '<tr><td colspan="5" class="empty">没有可统计的 PDF</td></tr>';
+    $("groupTable").querySelector("tbody").innerHTML = html;
+
+    var rows = $("groupTable").querySelectorAll("tr.grow");
+    for (var k = 0; k < rows.length; k++) {
+      rows[k].addEventListener("click", function () {
+        var label = this.getAttribute("data-group");
+        state.filter = (state.filter === label) ? "(all)" : label;
+        renderGroups();
+        renderFilters();
+        renderDetail();
+      });
+    }
+  }
+
+  function renderFilters() {
+    var t = totals();
+    var html = '<button class="chip' + (state.filter === "(all)" ? " is-on" : "") +
+      '" data-g="(all)">全部 <span class="n">' + fmt(t.files) + "</span></button>";
+    for (var i = 0; i < state.groups.length; i++) {
+      var g = state.groups[i];
+      html += '<button class="chip' + (state.filter === g.label ? " is-on" : "") +
+        '" data-g="' + esc(g.label) + '">' + esc(g.label) +
+        ' <span class="n">' + fmt(g.files) + "</span></button>";
+    }
+    $("filters").innerHTML = html;
+    var chips = $("filters").querySelectorAll(".chip");
+    for (var k = 0; k < chips.length; k++) {
+      chips[k].addEventListener("click", function () {
+        state.filter = this.getAttribute("data-g");
+        renderGroups();
+        renderFilters();
+        renderDetail();
+      });
+    }
+  }
+
+  function visibleRows() {
+    var q = state.query.trim().toLowerCase();
+    return state.entries.filter(function (r) {
+      if (state.filter !== "(all)" && groupLabel(r.group) !== state.filter) return false;
+      if (q && r.file.toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+  }
+
+  function renderDetail() {
+    var rows = visibleRows();
+    var t = totals();
+    var sumPages = 0, sumPrint = 0, sumFiles = 0;
+    var html = "";
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      sumFiles++;
+      if (r.pages !== null) { sumPages += r.pages; sumPrint += r.printPages; }
+      html +=
+        "<tr>" +
+        '<td><span class="folder">' + marksFor(groupLabel(r.group)) +
+        '<span class="name" title="' + esc(groupLabel(r.group)) + '">' + esc(groupLabel(r.group)) + "</span></span></td>" +
+        '<td><span class="file-cell"><span class="fn" title="' + esc(r.file) + '">' + esc(r.file) + "</span>" +
+        (r.note ? '<span class="fp bad">' + esc(r.note) + "</span>" : "") + "</span></td>" +
+        '<td class="num' + (r.pages === null ? " bad" : "") + '">' + (r.pages === null ? "—" : fmt(r.pages)) + "</td>" +
+        '<td class="num">' + fmt(r.copies) + "</td>" +
+        '<td class="num">' + (r.printPages === null ? "—" : fmt(r.printPages)) + "</td>" +
+        '<td class="num" style="font-size:12px;color:var(--ink-3)">' + (r.sizeKb >= 1024 ? (r.sizeKb / 1024).toFixed(1) + "M" : Math.round(r.sizeKb) + "K") + "</td>" +
+        "</tr>";
+    }
+    if (!html) html = '<tr><td colspan="6" class="empty">没有匹配的文件</td></tr>';
+    $("detailTable").querySelector("tbody").innerHTML = html;
+    $("detailHint").textContent = "当前显示 " + sumFiles + " 个文件，合计 " + fmt(sumPages) + " 页 / 打印 " + fmt(sumPrint) + " 页";
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  /* ---------- 导出 ---------- */
+
+  function csvCell(v) {
+    var s = v === null || v === undefined ? "" : String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function exportCsv() {
+    var rows = visibleRows();
+    if (!rows.length) { alert("当前没有可导出的行。"); return; }
+
+    /* 按文件夹分组，每个文件夹块后面跟一行小计：
+       小计行只有 print_pages 有值，形态为 ,,,,401, */
+    var order = [];
+    var buckets = Object.create(null);
+    for (var i = 0; i < rows.length; i++) {
+      var key = groupLabel(rows[i].group);
+      if (!buckets[key]) { buckets[key] = []; order.push(key); }
+      buckets[key].push(rows[i]);
+    }
+
+    var head = ["folder", "file", "pages", "copies", "print_pages", "note"];
+    var lines = [head.join(",")];
+    for (var g = 0; g < order.length; g++) {
+      var list = buckets[order[g]];
+      var sub = 0;
+      for (var j = 0; j < list.length; j++) {
+        var r = list[j];
+        if (r.printPages !== null) sub += r.printPages;
+        lines.push([
+          csvCell(order[g]),
+          csvCell(r.file),
+          csvCell(r.pages === null ? "" : r.pages),
+          csvCell(r.copies),
+          csvCell(r.printPages === null ? "" : r.printPages),
+          csvCell(r.note)
+        ].join(","));
+      }
+      lines.push(["", "", "", "", csvCell(sub), ""].join(","));
+    }
+
+    var blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "PDF页数明细_" + (state.rootName || "文件夹").replace(/[\\/:*?"<>|]/g, "_") + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
+  /* ---------- 导出 Excel 报表 ---------- */
+
+  function localDate() {
+    var d = new Date();
+    var pad = function (n) { return n < 10 ? "0" + n : "" + n; };
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+
+  function exportXlsx() {
+    var rows = visibleRows();
+    if (!rows.length) { alert("当前没有可导出的行。"); return; }
+    if (typeof XLSX_CORE === "undefined") { alert("报表组件没有加载完整，刷新页面后重试。"); return; }
+
+    var scope = state.filter === "(all)" && !state.query.trim() ? "全部文件" : "当前筛选结果";
+    var meta = "范围：" + (state.rootName || "所选文件夹") + " · " + state.groups.length +
+      " 个文件夹 / " + rows.length + " 个 PDF（" + scope + "）　统计日期：" + localDate();
+
+    var bytes;
+    try {
+      bytes = XLSX_CORE.build({
+        rows: rows,
+        rootName: state.rootName || "",
+        meta: meta,
+        sheet1Name: "汇总",
+        sheet2Name: "明细"
+      });
+    } catch (e) {
+      alert("生成报表失败：" + (e && e.message ? e.message : "未知原因"));
+      return;
+    }
+
+    var blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "PDF页数报告_" + (state.rootName || "文件夹").replace(/[\\/:*?"<>|]/g, "_") + ".xlsx";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
+  /* ---------- 入口：只用按钮选文件夹 ---------- */
+
+  async function pickDirectory() {
+    if (window.showDirectoryPicker) {
+      try {
+        var handle = await window.showDirectoryPicker({ mode: "read" });
+        await loadFromHandles([handle], handle.name);
+        return;
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+      }
+    }
+    $("dirInput").click();
+  }
+
+  $("pickBtn").addEventListener("click", function () {
+    if (state.busy) return;
+    pickDirectory();
+  });
+
+  $("dirInput").addEventListener("change", async function () {
+    var files = Array.prototype.slice.call(this.files || []);
+    this.value = "";
+    if (!files.length) return;
+    var items = files.map(function (f) {
+      return { file: f, path: f.webkitRelativePath || f.name };
+    });
+    var roots = {};
+    items.forEach(function (it) {
+      var seg = it.path.split("/")[0];
+      roots[seg] = true;
+    });
+    var names = Object.keys(roots);
+    await loadFiles(items, names.length === 1 ? names[0] : "所选的 " + names.length + " 个文件夹");
+  });
+
+  $("search").addEventListener("input", function () {
+    state.query = this.value;
+    renderDetail();
+  });
+
+  $("csvBtn").addEventListener("click", exportCsv);
+  var xb = $("xlsxBtn");
+  if (xb) xb.addEventListener("click", exportXlsx);
+
+  var ths = document.querySelectorAll("#groupTable th.sortable");
+  for (var i = 0; i < ths.length; i++) {
+    ths[i].addEventListener("click", function () {
+      var key = this.getAttribute("data-sort");
+      if (state.sortKey === key) state.sortDir = -state.sortDir;
+      else { state.sortKey = key; state.sortDir = key === "folder" ? 1 : -1; }
+      renderGroups();
+      markSorted();
+    });
+  }
+
+  function markSorted() {
+    var ths = document.querySelectorAll("#groupTable th.sortable");
+    for (var i = 0; i < ths.length; i++) {
+      var on = ths[i].getAttribute("data-sort") === state.sortKey;
+      ths[i].classList.toggle("is-sorted", on);
+      ths[i].classList.toggle("asc", on && state.sortDir === 1);
+    }
+  }
+
+  markSorted();
+})();
+</script>
+</body>
+</html>
